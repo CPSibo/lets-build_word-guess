@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Word Guess - Let's Build</title>
+  <script src="https://unpkg.com/vue"></script>
+
+  <style>
+    :root {
+      --success: #109d3a;
+      --error: #a90024;
+    }
+
+    body {
+      /* Make sure we don't inherit any default page whitepace. */
+      margin: 0;
+      padding: 0;
+      font-size: 1.2rem;
+
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(315deg, rgba(222, 157, 189, 1) 0%, rgba(143, 192, 233, 1) 100%);
+    }
+
+    button {
+      padding: 0.5em;
+      font-size: 0.75em;
+      font-weight: bold;
+      letter-spacing: 0.02em;
+      border-radius: 4px;
+      border: none;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      cursor: not-allowed;
+    }
+
+    button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      transition-property: background-color;
+      transition-duration: 0.3s;
+      ;
+    }
+
+    button:not([disabled]):hover::after {
+      background-color: #00000020;
+    }
+
+    input[type="text"] {
+      border: none;
+      border-radius: 4px;
+      padding: 0.4em;
+      font-size: 0.75em;
+      width: 6em;
+    }
+
+    #app,
+    .page-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .title {
+      font-size: 4em;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .word-display {
+      display: flex;
+      justify-content: start;
+      align-items: center;
+      margin: 3em 0;
+    }
+
+    .letter-display {
+      width: 1em;
+      height: 1em;
+      margin: 0.5em 0.2em;
+      font-size: 1.75em;
+      font-weight: bold;
+      border-bottom: 3px solid black;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      text-transform: uppercase;
+      transition-property: margin, width;
+      transition-duration: 0.3s;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    .word-display.won .letter-display,
+    .word-display.lost .letter-display {
+      -webkit-text-stroke: 1px #333;
+
+      margin-left: 0;
+      margin-right: 0;
+      width: 1em;
+    }
+
+    .word-display.won .letter-display {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .word-display.lost .letter-display {
+      border-color: var(--error);
+      color: var(--error);
+    }
+
+    .input-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 3em;
+      width: 15em;
+      flex-wrap: wrap;
+      flex-direction: row-reverse;
+    }
+
+    .letters-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 300px;
+      gap: 5px;
+    }
+
+    .letter-button {
+      width: 2em;
+      height: 2em;
+    }
+
+    .guesses-left {
+      margin: 1em 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" @keyup="typeLetter" tabindex="0" ref="app">
+    <div class="title">
+      word guess
+    </div>
+
+    <div :class="['word-display', { won }, { lost }]">
+      <div v-for="(letter, index) in wordDisplay" :key="index" class="letter-display">
+        {{ letter }}
+      </div>
+    </div>
+
+    <div class="input-container" v-if="won || lost">
+      <button @click.prevent="reset" ref="reset">Reset</button>
+      {{ won ? 'Won' : 'Lost' }}!
+    </div>
+    <div class="input-container" v-else>
+      <button @click.prevent="giveHint" v-show="!won && !lost" ref="hint">
+        Get Hint
+      </button>
+    </div>
+
+    <div class="letters-grid">
+      <button v-for="letter in letters" :key="letter" class="letter-button" :disabled="letterDisabled(letter)"
+        @click.prevent="guessLetter(letter)">
+        {{ letter }}
+      </button>
+    </div>
+
+    <div class="guesses-left">
+      Incorrect guesses left: {{ chancesRemaining }}
+    </div>
+  </div>
+
+  <script>
+    var app = new Vue({
+      el: '#app',
+
+      data: {
+        word: '',
+        correctLetters: [],
+        incorrectLetters: [],
+        chances: 5,
+        currentLetter: '',
+        wordQueue: [],
+      },
+
+      computed: {
+        wordDisplay() {
+          if (!this.word) return []
+
+          if (!this.correctLetters) return this.word.split('').map(f => null)
+
+          return this.word.split('').map(f => this.correctLetters.includes(f.toLowerCase()) ? f : null)
+        },
+
+        guessedLetters() {
+          return [
+            ...this.incorrectLetters,
+            ...this.correctLetters
+          ]
+        },
+
+        unguessedWordLetters() {
+          if (!this.word) return []
+
+          let unguessedRawLetters = this.word.split('')
+
+          if (this.correctLetters && this.correctLetters.length)
+            unguessedRawLetters = this.word.split('').filter(f => !this.correctLetters.includes(f.toLowerCase()))
+
+          return [...new Set(unguessedRawLetters)]
+        },
+
+        distinctLettersInWord() {
+          if (!this.word) return []
+
+          return [...new Set(this.word)]
+        },
+
+        chancesUsed() {
+          if (!this.incorrectLetters) return 0
+
+          return this.incorrectLetters.length
+        },
+
+        chancesRemaining() {
+          return this.chances - this.chancesUsed
+        },
+
+        lost() {
+          return this.chancesRemaining <= 0
+        },
+
+        won() {
+          if (this.lost) return false
+
+          if (!this.word) return false
+
+          return this.distinctLettersInWord.sort().toString()
+            === this.correctLetters.sort().toString()
+        },
+
+        letters() {
+          return Array(26).fill().map((_, f) => String.fromCharCode('A'.charCodeAt(0) + f))
+        },
+      },
+
+      created() {
+        this.reset()
+      },
+
+      mounted() {
+        this.$refs.hint.focus()
+      },
+
+      methods: {
+        typeLetter({ key }) {
+          if (!this.letters.includes(key.toUpperCase())) return false
+
+          this.guessLetter(key)
+        },
+
+        guessLetter(letter) {
+          if (letter)
+            this.currentLetter = letter
+
+          const normalizedLetter = this.currentLetter.toLowerCase()
+          this.currentLetter = ''
+
+          if (!normalizedLetter || !normalizedLetter.length) return false
+
+          if (!this.incorrectLetters) this.incorrectLetters = []
+
+          if (this.incorrectLetters.includes(normalizedLetter)) return false
+
+          if (this.correctLetters.includes(normalizedLetter)) return false
+
+          if (!this.word.includes(normalizedLetter)) {
+            this.incorrectLetters.push(normalizedLetter)
+
+            return false
+          }
+
+          this.correctLetters.push(normalizedLetter)
+
+          return true
+        },
+
+        reset() {
+          this.incorrectLetters = []
+          this.correctLetters = []
+          this.currentLetter = ''
+          this.selectWord()
+        },
+
+        async selectWord() {
+          if (!this.wordQueue || !this.wordQueue.length)
+            await this.getWords()
+
+          this.word = this.wordQueue.pop()
+        },
+
+        giveHint() {
+          if (this.won || this.lost) return
+
+          const possibleHints = this.unguessedWordLetters
+
+          if (!possibleHints || !possibleHints.length) return
+
+          const letterIndex = Math.floor(Math.random() * (possibleHints.length - 1))
+
+          this.correctLetters.push(possibleHints[letterIndex])
+        },
+
+        getRandomUnguessedLetter() {
+          if (!this.word) return null
+
+          if (this.won) return null
+
+          this.word.split('').filter(f => this.correctLetters.incorrectLetters)
+        },
+
+        async getWords() {
+          try {
+            const response = await fetch('https://random-word-api.herokuapp.com/word?number=10&swear=0')
+
+            const words = await response.json()
+
+            if (!words || !words.length) return
+
+            this.wordQueue.push(...words)
+          }
+          catch (ex) {
+            console.error(ex)
+          }
+        },
+
+        solve() {
+          this.incorrectLetters.push(...Array.from(this.word.length).fill())
+          this.correctLetters.push(...this.unguessedWordLetters)
+        },
+
+        letterDisabled(letter) {
+          return this.guessedLetters.includes(letter.toLowerCase())
+            || this.lost || this.won
+        },
+      },
+
+      watch: {
+        lost() {
+          if (this.lost) {
+            this.solve()
+
+            this.$nextTick(() => this.$refs.reset.focus())
+          }
+        },
+
+        won() {
+          if (this.won) {
+            this.$nextTick(() => this.$refs.reset.focus())
+          }
+        },
+      },
+    })
+  </script>
+</body>
+
+</html>
