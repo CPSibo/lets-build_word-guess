@@ -285,6 +285,13 @@
 
         // True, if the player has won this round.
         won() {
+          // The game is `fail-safe` in that the losing
+          // condition is checked independantly while
+          // the winning condition only runs if the
+          // losing condition is false.
+          //
+          // This lets us simply our solve() logic
+          // and display logic.
           if (this.lost) return false
 
           if (!this.word) return false
@@ -417,14 +424,22 @@
         // Instantly solves the word, putting the game
         // in a `lost` state and revealing the missing letters.
         solve() {
+          // We can push a enough blank entries to our
+          // incorrect guesses list to trigger the
+          // `game lost` logic.
           this.incorrectLetters.push(...Array.from(this.word.length).fill())
+
+          // Then we can push the rest of our unguessed
+          // word letters to the correct guesses list
+          // to reveal the whole word.
           this.correctLetters.push(...this.unguessedWordLetters)
         },
 
         // Returns whether the given letter can be guessed.
         letterDisabled(letter) {
           return this.guessedLetters.includes(letter.toLowerCase())
-            || this.lost || this.won
+            || this.lost
+            || this.won
         },
       },
 
