@@ -7,6 +7,7 @@
 
   <style>
     :root {
+      /* Global theme colors. */
       --success: #109d3a;
       --error: #a90024;
     }
@@ -38,7 +39,9 @@
     }
 
     button::after {
+      /* Need content, even if empty, to size the pseudo-element. */
       content: '';
+
       position: absolute;
       top: 0;
       left: 0;
@@ -100,10 +103,12 @@
       font-family: 'Courier New', Courier, monospace;
     }
 
+    /* Letter display rules for the end of the game. */
     .word-display.won .letter-display,
     .word-display.lost .letter-display {
       -webkit-text-stroke: 1px #333;
 
+      /* Remove the spacing between letters. */
       margin-left: 0;
       margin-right: 0;
       width: 1em;
@@ -187,23 +192,43 @@
       el: '#app',
 
       data: {
+        // The word being guessed.
         word: '',
+
+        // Letters guessed that are in the word.
         correctLetters: [],
+
+        // Letters guessed that aren't in the word.
         incorrectLetters: [],
+
+        // Maximum number of incorrect guesses allowed.
         chances: 5,
+
+        // The letter currently being guessed.
         currentLetter: '',
+
+        // Queue of words that can supply
+        // future rounds of the game.
         wordQueue: [],
       },
 
       computed: {
+        // The letters to display to the user.
+        // Correctly-guessed letters are shown as themselves.
+        // Un-guessed letters are blank.
         wordDisplay() {
           if (!this.word) return []
 
+          // If the player hasn't made any correct guesses,
+          // just return the whole word as blank spaces.
           if (!this.correctLetters) return this.word.split('').map(f => null)
 
+          // Return the word with correct guesses shown and everything
+          // else replaced with blanks.
           return this.word.split('').map(f => this.correctLetters.includes(f.toLowerCase()) ? f : null)
         },
 
+        // All letters guessed so far, correct or not.
         guessedLetters() {
           return [
             ...this.incorrectLetters,
@@ -211,92 +236,130 @@
           ]
         },
 
+        // All letters in the word not guessed so far.
         unguessedWordLetters() {
           if (!this.word) return []
 
+          // Default our unguessed letters to all of our
+          // word letters.
           let unguessedRawLetters = this.word.split('')
 
+          // If the player has made any correct guesses,
+          // set our unguessed letters to the word letters
+          // minus the correct guesses.
           if (this.correctLetters && this.correctLetters.length)
             unguessedRawLetters = this.word.split('').filter(f => !this.correctLetters.includes(f.toLowerCase()))
 
+          // By turning the array into a set and back
+          // into an array, we let the Set constructor
+          // remove any duplicates.
           return [...new Set(unguessedRawLetters)]
         },
 
+        // Distinct array of letters that are in the word.
         distinctLettersInWord() {
           if (!this.word) return []
 
+          // By turning the word into a set and back
+          // into an array, we let the Set constructor
+          // remove any duplicates.
           return [...new Set(this.word)]
         },
 
+        // Number of incorrect guesses, so far.
         chancesUsed() {
           if (!this.incorrectLetters) return 0
 
           return this.incorrectLetters.length
         },
 
+        // Number of incorrect guesses remaining.
         chancesRemaining() {
           return this.chances - this.chancesUsed
         },
 
+        // True, if the player has lost this round.
         lost() {
           return this.chancesRemaining <= 0
         },
 
+        // True, if the player has won this round.
         won() {
           if (this.lost) return false
 
           if (!this.word) return false
 
+          // Easiest way to check if two flat arrays are equal is
+          // to sort and toString them.
           return this.distinctLettersInWord.sort().toString()
             === this.correctLetters.sort().toString()
         },
 
+        // Array of all guessable letters (ie. the english alphabet).
         letters() {
           return Array(26).fill().map((_, f) => String.fromCharCode('A'.charCodeAt(0) + f))
         },
       },
 
       created() {
+        // Set-up the game for the first round.
         this.reset()
       },
 
       mounted() {
+        // Move focus to our hint control at
+        // page mount.
         this.$refs.hint.focus()
       },
 
       methods: {
+        // Handles the player guessing a letter via typing it.
         typeLetter({ key }) {
           if (!this.letters.includes(key.toUpperCase())) return false
 
           this.guessLetter(key)
         },
 
+        // Performs the logic to check if a letter
+        // is correct or not and the subsequent consequences.
         guessLetter(letter) {
+          // If we're given a letter to check, use that.
+          // Otherwise, we'll assume currentLetter has our
+          // letter to check.
           if (letter)
             this.currentLetter = letter
 
+          // We need to normalize all inputs to make
+          // comparison easier later.
           const normalizedLetter = this.currentLetter.toLowerCase()
+
           this.currentLetter = ''
 
+          // Don't try to guess whitespace.
           if (!normalizedLetter || !normalizedLetter.length) return false
 
           if (!this.incorrectLetters) this.incorrectLetters = []
 
+          // If we've already guessed this and it's incorrect, do nothing.
           if (this.incorrectLetters.includes(normalizedLetter)) return false
 
+          // If we've already guessed this and it's correct, do nothing.
           if (this.correctLetters.includes(normalizedLetter)) return false
 
+          // If the guess is incorrect...
           if (!this.word.includes(normalizedLetter)) {
             this.incorrectLetters.push(normalizedLetter)
 
             return false
           }
 
+          // If the guess is correct...
           this.correctLetters.push(normalizedLetter)
 
           return true
         },
 
+        // Resets the game board for a new round.
         reset() {
           this.incorrectLetters = []
           this.correctLetters = []
@@ -304,41 +367,46 @@
           this.selectWord()
         },
 
+        // Gets the next word for the user to guess.
         async selectWord() {
+          // If we don't have another word queued up,
+          // pull a new list.
           if (!this.wordQueue || !this.wordQueue.length)
             await this.getWords()
 
           this.word = this.wordQueue.pop()
         },
 
+        // Gives a single letter that exists
+        // in the word and hasn't yet been guessed.
         giveHint() {
           if (this.won || this.lost) return
 
+          // Check for any word letters that aren't guessed yet.
           const possibleHints = this.unguessedWordLetters
 
           if (!possibleHints || !possibleHints.length) return
 
+          // Get a random letter from our unguessed word letters.
           const letterIndex = Math.floor(Math.random() * (possibleHints.length - 1))
 
+          // Add the letter to our correct guesses list.
           this.correctLetters.push(possibleHints[letterIndex])
         },
 
-        getRandomUnguessedLetter() {
-          if (!this.word) return null
-
-          if (this.won) return null
-
-          this.word.split('').filter(f => this.correctLetters.incorrectLetters)
-        },
-
+        // Retrieves a number of random words to push
+        // to the word queue.
         async getWords() {
           try {
+            // Get a list of words from the external word souce.
             const response = await fetch('https://random-word-api.herokuapp.com/word?number=10&swear=0')
 
+            // Parse the JSON response from above.
             const words = await response.json()
 
             if (!words || !words.length) return
 
+            // Push all our new words into the word queue.
             this.wordQueue.push(...words)
           }
           catch (ex) {
@@ -346,11 +414,14 @@
           }
         },
 
+        // Instantly solves the word, putting the game
+        // in a `lost` state and revealing the missing letters.
         solve() {
           this.incorrectLetters.push(...Array.from(this.word.length).fill())
           this.correctLetters.push(...this.unguessedWordLetters)
         },
 
+        // Returns whether the given letter can be guessed.
         letterDisabled(letter) {
           return this.guessedLetters.includes(letter.toLowerCase())
             || this.lost || this.won
@@ -359,15 +430,22 @@
 
       watch: {
         lost() {
+          // If the player has just lost...
           if (this.lost) {
+            // Reveal the rest of the letters.
             this.solve()
 
+            // Focus on the reset button to allow for
+            // starting the next round.
             this.$nextTick(() => this.$refs.reset.focus())
           }
         },
 
         won() {
+          // If the player has just won...
           if (this.won) {
+            // Focus on the reset button to allow for
+            // starting the next round.
             this.$nextTick(() => this.$refs.reset.focus())
           }
         },
