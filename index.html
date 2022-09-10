@@ -406,7 +406,9 @@
         async getWords() {
           try {
             // Get a list of words from the external word souce.
-            const response = await fetch('https://random-word-api.herokuapp.com/word?number=10&swear=0')
+            const response = await fetch('https://random-word-api.herokuapp.com/word?number=10&swear=0',{
+              mode: 'no-cors',
+            })
 
             // Parse the JSON response from above.
             const words = await response.json()
